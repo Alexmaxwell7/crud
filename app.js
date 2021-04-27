@@ -16,6 +16,7 @@ con.on("open",()=>{
 app.use(express.json())
 
 app.use('/',require('./routes/book'))
+app.use('/',require('./routes/user'))
 
 app.listen(5000,()=>{
     console.log("server Started")

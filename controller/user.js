@@ -2,97 +2,59 @@ const express = require("express");
 const User = require("../models/user");
 const bcrypt = require("bcryptjs");
 const jsonwt = require("jsonwebtoken");
-// const key = require("../Setup/url").secret;
+const SECRETKEY = "max@123";
+const Joi = require("joi");
 
-// router.post("/userInfo", async (req, res) => {
-//   jsonwt.verify(req.cookies.auth_t, key, (err, user) => {
-//     if (user) {
-//       return res.json({
-//         email: user.email,
-//         username: user.username,
-//         description: user.description
-//       });
-//     }
-//   });
-// });
-
-exports.getUserDetails = async (req, res) => {
-  jsonwt.verify(req.cookies.auth_t, (err, user) => {
-    if (user) {
-      return res.json({
-        email: user.email,
-        username: user.username,
-        description: user.description
-      });
-    }
-  });
-};
-
-exports.RegisterUser = async (req, res) => {
-  const { username, email, password, description } = req.body;
-
-  const user = await User.findOne({ email });
-
-  if (user) {
-    return res.json({ success: false, errMessage: "User Already Exists" });
-  } else {
-    let newUser = new User({
-      username,
-      email,
-      password,
-      description
-    });
-    bcrypt.genSalt(10, (err, salt) => {
-      bcrypt.hash(newUser.password, salt, (err, hash) => {
-        newUser.password = hash;
-        newUser.save().catch(err => console.log(err));
-      });
-    });
-    return res.json({
-      success: true,
-      errMessage: "User Registered Successfully"
-    });
-  }
-};
 
 exports.LoginUser = async (req, res) => {
-  const { email, password } = req.body;
+  const schema = Joi.object({
+    email: Joi.string().min(3).max(200).required().email(),
+    password: Joi.string().min(6).max(200).required(),
+  });
 
-  const user = await User.findOne({ email });
+  const { error } = schema.validate(req.body);
 
-  if (!user) {
-    return res.json({ success: false, errMessage: "User Doesn't exist." });
-  } else {
-    var payload = {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      description: user.description
-    };
+  if (error) return res.status(400).send(error.details[0].message);
 
-    bcrypt
-      .compare(password, user.password)
-      .then(isCorrect => {
-        if (!isCorrect)
-          return res.json({
-            success: false,
-            errMessage: "Password Incorrect."
-          });
-        else {
-          jsonwt.sign(payload, { expiresIn: 9000000 }, (err, token) => {
-            res.cookie("auth_t", token, { maxAge: 90000000 });
-            res.cookie("username", payload.username, { maxAge: 90000000 });
-            return res.json({ success: true, errMessage: "Logged In..." });
-          });
-        }
-      })
-      .catch(err => console.log(err));
-  }
+  let user = await User.findOne({ email: req.body.email });
+  if (!user) return res.status(400).send("Invalid email or password...");
+
+  const validPassword = await bcrypt.compare(req.body.password, user.password);
+  if (!validPassword)
+    return res.status(400).send("Invalid email or password...");
+
+  // const jwtSecretKey = process.env.TODO_APP_JWT_SECRET_KEY;
+  const token = jsonwt.sign({ _id: user._id, name: user.name, email: user.email }, SECRETKEY)
+
+  res.send(token);
 };
 
-// router.get("/logout", (req, res) => {
-//   res.clearCookie("auth_t");
-//   req.logout();
-// });
+exports.RegisterUser= async (req, res) => {
+  const schema = Joi.object({
+    name: Joi.string().min(3).max(30).required(),
+    email: Joi.string().min(3).max(200).required().email(),
+    password: Joi.string().min(6).max(200).required(),
+  });
 
-// module.exports = router;
+  const { error } = schema.validate(req.body);
+
+  if (error) return res.status(400).send(error.details[0].message);
+
+  let user = await User.findOne({ email: req.body.email });
+  if (user) return res.status(400).send("User already exists...");
+
+  const { name, email, password } = req.body;
+
+  user = new User({ name, email, password });
+
+  const salt = await bcrypt.genSalt(10);
+  user.password = await bcrypt.hash(user.password, salt);
+
+  await user.save();
+
+  // const jwtSecretKey = process.env.TODO_APP_JWT_SECRET_KEY;
+  const token = jsonwt.sign({ _id: user._id, name: user.name, email: user.email }, SECRETKEY)
+
+  res.send(token);
+};
+

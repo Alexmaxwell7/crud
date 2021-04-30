@@ -22,6 +22,7 @@ exports.getTodos = async (req, res) => {
 exports.InsertTodo = async (req, res) => {
     const todo = new Todos({
         name: req.body.name,
+        description:req.body.description,
         author: req.body.author,
         uid: req.body.uid,
         isComplete: req.body.isComplete,
